@@ -21,7 +21,7 @@ if (isset($_GET['charset']) && !emptyempty($_GET['charset'])) {
 header("Content-Type: text/html; charset=$charset");
 # 格式化判断，输出js或纯文本
 if ($_GET['format'] === 'js') {
-    echo "function hitokoto(){document.write(‘" . $content ."‘);}";
+    echo "function joke(){document.write(‘" . $content ."‘);}";
 } else {
     echo $content;
 }
