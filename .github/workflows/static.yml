@@ -1,43 +1,73 @@
-# Simple workflow for deploying static content to GitHub Pages
 name: Deploy static content to Pages
 
 on:
-  # Runs on pushes targeting the default branch
   push:
     branches: ["main"]
-
-  # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
-# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
   contents: read
   pages: write
   id-token: write
 
-# Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
-# However, do NOT cancel in-progress runs as we want to allow these production deployments to complete.
 concurrency:
-  group: "pages"
+  group: pages
   cancel-in-progress: false
 
 jobs:
-  # Single deploy job since we're just deploying
   deploy:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout homepage
         uses: actions/checkout@v4
-      - name: Setup Pages
-        uses: actions/configure-pages@v4
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v2
         with:
-          # Upload entire repository
-          path: '.'
+          path: homepage
+      - name: Checkout Clever engine and frontend
+        uses: actions/checkout@v4
+        with:
+          repository: KODU16/tswn-core-clever
+          ref: main
+          path: engine
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: engine
+      - name: Test battle frontend
+        working-directory: engine
+        run: node --test crates/tswn_wasm/tests/*.test.mjs
+      - name: Build Clever WASM
+        working-directory: engine
+        run: |
+          cargo build --locked --release -p tswn_wasm --target wasm32-unknown-unknown
+          VERSION=$(python3 -c 'import tomllib; print(tomllib.load(open("crates/tswn_wasm/Cargo.toml", "rb"))["dependencies"]["wasm-bindgen"])')
+          cargo install wasm-bindgen-cli --version "$VERSION" --locked
+          wasm-bindgen --target web --out-dir pkg target/wasm32-unknown-unknown/release/tswn_wasm.wasm
+      - name: Assemble homepage and Clever frontend
+        run: |
+          mkdir -p site/namerena-clever/pkg
+          cp homepage/index.html site/index.html
+          cp -R homepage/hitokoto site/hitokoto
+          cp engine/crates/tswn_wasm/examples/*.html site/namerena-clever/
+          cp engine/crates/tswn_wasm/examples/*.css site/namerena-clever/
+          cp engine/crates/tswn_wasm/examples/*.js site/namerena-clever/
+          cp engine/pkg/* site/namerena-clever/pkg/
+          touch site/.nojekyll
+          ENGINE_SHA=$(git -C engine rev-parse HEAD)
+          printf '{"repository":"KODU16/tswn-core-clever","commit":"%s"}\n' "$ENGINE_SHA" > site/namerena-clever/build.json
+          test -s site/namerena-clever/pkg/tswn_wasm_bg.wasm
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v3
+        uses: actions/deploy-pages@v4
