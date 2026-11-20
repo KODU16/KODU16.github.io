@@ -3,6 +3,8 @@ name: Deploy static content to Pages
 on:
   push:
     branches: ["main"]
+  schedule:
+    - cron: "*/5 * * * *"
   workflow_dispatch:
 
 permissions:
@@ -15,7 +17,29 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  source:
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.source.outputs.sha }}
+      changed: ${{ steps.source.outputs.changed }}
+    steps:
+      - name: Check Clever release source
+        id: source
+        shell: bash
+        run: |
+          SHA=$(git ls-remote https://github.com/KODU16/tswn-core-clever.git refs/heads/main | cut -f1)
+          test -n "$SHA"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          LIVE=$(curl -fsSL --retry 3 "https://kodu16.github.io/namerena-clever/build.json?run=${{ github.run_id }}" || echo '{}')
+          LIVE_SHA=$(printf '%s' "$LIVE" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("commit", ""))')
+          if [ "$SHA" = "$LIVE_SHA" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
   deploy:
+    needs: source
+    if: github.event_name != 'schedule' || needs.source.outputs.changed == 'true'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -29,7 +53,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: KODU16/tswn-core-clever
-          ref: main
+          ref: ${{ needs.source.outputs.sha }}
           path: engine
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
