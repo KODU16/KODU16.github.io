@@ -30,7 +30,7 @@ jobs:
           SHA=$(git ls-remote https://github.com/KODU16/tswn-core-clever.git refs/heads/main | cut -f1)
           test -n "$SHA"
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
-          LIVE=$(curl -fsSL --retry 3 "https://kodu16.github.io/namerena-clever/build.json?run=${{ github.run_id }}" || echo '{}')
+          LIVE=$(curl -fsSL --retry 3 "https://kodu16.github.io/namerena/build.json?run=${{ github.run_id }}" || echo '{}')
           LIVE_SHA=$(printf '%s' "$LIVE" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("commit", ""))')
           if [ "$SHA" = "$LIVE_SHA" ]; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
@@ -75,17 +75,18 @@ jobs:
           wasm-bindgen --target web --out-dir pkg target/wasm32-unknown-unknown/release/tswn_wasm.wasm
       - name: Assemble homepage and Clever frontend
         run: |
-          mkdir -p site/namerena-clever/pkg
+          # 引擎和前端保持同一提交，统一发布到 /namerena/。
+          mkdir -p site/namerena/pkg
           cp homepage/index.html site/index.html
           cp -R homepage/hitokoto site/hitokoto
-          cp engine/crates/tswn_wasm/examples/*.html site/namerena-clever/
-          cp engine/crates/tswn_wasm/examples/*.css site/namerena-clever/
-          cp engine/crates/tswn_wasm/examples/*.js site/namerena-clever/
-          cp engine/pkg/* site/namerena-clever/pkg/
+          cp engine/crates/tswn_wasm/examples/*.html site/namerena/
+          cp engine/crates/tswn_wasm/examples/*.css site/namerena/
+          cp engine/crates/tswn_wasm/examples/*.js site/namerena/
+          cp engine/pkg/* site/namerena/pkg/
           touch site/.nojekyll
           ENGINE_SHA=$(git -C engine rev-parse HEAD)
-          printf '{"repository":"KODU16/tswn-core-clever","commit":"%s"}\n' "$ENGINE_SHA" > site/namerena-clever/build.json
-          test -s site/namerena-clever/pkg/tswn_wasm_bg.wasm
+          printf '{"repository":"KODU16/tswn-core-clever","commit":"%s"}\n' "$ENGINE_SHA" > site/namerena/build.json
+          test -s site/namerena/pkg/tswn_wasm_bg.wasm
       - name: Setup Pages
         uses: actions/configure-pages@v5
       - name: Upload artifact
