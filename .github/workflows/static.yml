@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
   pages: write
   id-token: write
 
@@ -94,6 +95,23 @@ jobs:
         with:
           path: site
           name: github-pages-${{ github.run_attempt }}
+      # 上传成功后，Actions API 可能暂时还查不到产物。
+      - name: Wait for Pages artifact metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_NAME: github-pages-${{ github.run_attempt }}
+        shell: bash
+        run: |
+          for attempt in {1..15}; do
+            if gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts" \
+              --jq ".artifacts[] | select(.name == "$ARTIFACT_NAME" and .expired == false) | .id" \
+              | grep -q .; then
+              exit 0
+            fi
+            sleep 4
+          done
+          echo "::error::Pages artifact metadata did not become available"
+          exit 1
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
